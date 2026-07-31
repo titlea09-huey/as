@@ -1,0 +1,303 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- ค่าปรับแต่ง
+local fovSize = 150
+local aimbotEnabled = false
+local currentTarget = nil -- ตัวแปรจำเป้าหมายปัจจุบันเพื่อให้ล็อกต่อเนื่อง
+
+-- สร้าง GUI เมนูหลัก
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CustomAimbotGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game.CoreGui
+
+-- วง FOV (Circle) อยู่กลางจอ
+local FOFCircle = Drawing.new("Circle")
+FOFCircle.Visible = true
+FOFCircle.Transparency = 0.7
+FOFCircle.Thickness = 2
+FOFCircle.Color = Color3.fromRGB(255, 0, 0)
+FOFCircle.Filled = false
+
+-- เมนู UI ควบคุม
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 220, 0, 220)
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+-- หัวข้อ UI
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -30, 0, 35)
+Title.Position = UDim2.new(0, 5, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "AIMBOT & ESP PANEL"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.SourceSansBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = MainFrame
+
+-- ปุ่มกากบาท (ปิดสคริปต์)
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 25, 0, 25)
+CloseBtn.Position = UDim2.new(1, -30, 0, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.Parent = MainFrame
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 5)
+
+-- ฟังก์ชันทำลายสคริปต์ทั้งหมดเมื่อกด X
+local function unloadScript()
+    aimbotEnabled = false
+    currentTarget = nil
+    if FOFCircle then
+        FOFCircle:Remove()
+    end
+    if ScreenGui then
+        ScreenGui:Destroy()
+    end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character and player.Character:FindFirstChild("RedHighlight") then
+            player.Character.RedHighlight:Destroy()
+        end
+    end
+end
+
+CloseBtn.MouseButton1Click:Connect(unloadScript)
+
+-- ปุ่มเปิด/ปิด Aimbot
+local AimbotBtn = Instance.new("TextButton")
+AimbotBtn.Size = UDim2.new(0.9, 0, 0, 35)
+AimbotBtn.Position = UDim2.new(0.05, 0, 0.2, 0)
+AimbotBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+AimbotBtn.Text = "Aimbot: OFF"
+AimbotBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AimbotBtn.TextSize = 14
+AimbotBtn.Font = Enum.Font.SourceSansBold
+AimbotBtn.Parent = MainFrame
+Instance.new("UICorner", AimbotBtn).CornerRadius = UDim.new(0, 6)
+
+AimbotBtn.MouseButton1Click:Connect(function()
+    aimbotEnabled = not aimbotEnabled
+    if aimbotEnabled then
+        AimbotBtn.Text = "Aimbot: ON"
+        AimbotBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    else
+        AimbotBtn.Text = "Aimbot: OFF"
+        AimbotBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        currentTarget = nil
+    end
+end)
+
+-- กล่องพิมพ์ปรับขนาด FOV
+local FOVBox = Instance.new("TextBox")
+FOVBox.Size = UDim2.new(0.9, 0, 0, 35)
+FOVBox.Position = UDim2.new(0.05, 0, 0.42, 0)
+FOVBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+FOVBox.Text = tostring(fovSize)
+FOVBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+FOVBox.TextSize = 14
+FOVBox.Font = Enum.Font.SourceSans
+FOVBox.Parent = MainFrame
+Instance.new("UICorner", FOVBox).CornerRadius = UDim.new(0, 6)
+
+FOVBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local num = tonumber(FOVBox.Text)
+        if num then
+            fovSize = num
+        else
+            FOVBox.Text = tostring(fovSize)
+        end
+    end
+end)
+
+-- ปุ่มเพิ่ม/ลดขนาด FOV
+local MinusBtn = Instance.new("TextButton")
+MinusBtn.Size = UDim2.new(0.42, 0, 0, 35)
+MinusBtn.Position = UDim2.new(0.05, 0, 0.64, 0)
+MinusBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+MinusBtn.Text = "FOV - (-20)"
+MinusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinusBtn.TextSize = 12
+MinusBtn.Parent = MainFrame
+Instance.new("UICorner", MinusBtn).CornerRadius = UDim.new(0, 6)
+
+MinusBtn.MouseButton1Click:Connect(function()
+    fovSize = math.max(10, fovSize - 20)
+    FOVBox.Text = tostring(fovSize)
+end)
+
+local PlusBtn = Instance.new("TextButton")
+PlusBtn.Size = UDim2.new(0.42, 0, 0, 35)
+PlusBtn.Position = UDim2.new(0.53, 0, 0.64, 0)
+PlusBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+PlusBtn.Text = "FOV + (+20)"
+PlusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+PlusBtn.TextSize = 12
+PlusBtn.Parent = MainFrame
+Instance.new("UICorner", PlusBtn).CornerRadius = UDim.new(0, 6)
+
+PlusBtn.MouseButton1Click:Connect(function()
+    fovSize = fovSize + 20
+    FOVBox.Text = tostring(fovSize)
+end)
+
+-- ปุ่มซ่อน/แสดง เมนู
+local ToggleUIBtn = Instance.new("TextButton")
+ToggleUIBtn.Size = UDim2.new(0.9, 0, 0, 25)
+ToggleUIBtn.Position = UDim2.new(0.05, 0, 0.84, 0)
+ToggleUIBtn.BackgroundColor3 = Color3.fromRGB(100, 50, 150)
+ToggleUIBtn.Text = "Minimize / Hide Menu"
+ToggleUIBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleUIBtn.TextSize = 11
+ToggleUIBtn.Parent = MainFrame
+Instance.new("UICorner", ToggleUIBtn).CornerRadius = UDim.new(0, 6)
+
+local minimized = false
+ToggleUIBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    for _, child in ipairs(MainFrame:GetChildren()) do
+        if child ~= Title and child ~= CloseBtn and child ~= ToggleUIBtn and child ~= UICorner then
+            child.Visible = not minimized
+        end
+    end
+    MainFrame.Size = minimized and UDim2.new(0, 220, 0, 70) or UDim2.new(0, 220, 0, 220)
+end)
+
+-- ฟังก์ชัน ESP มองทะลุกำแพง (Highlight สีแดง)
+local function applyESP(character)
+    if character == LocalPlayer.Character then return end
+    if character:FindFirstChild("RedHighlight") then return end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "RedHighlight"
+    highlight.Adornee = character
+    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0
+    highlight.Parent = character
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+    if player.Character then
+        task.spawn(function() applyESP(player.Character) end)
+    end
+    player.CharacterAdded:Connect(function(char)
+        task.wait(1)
+        if ScreenGui.Parent then applyESP(char) end
+    end)
+end
+
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(char)
+        task.wait(1)
+        if ScreenGui.Parent then applyESP(char) end
+    end)
+end)
+
+-- ฟังก์ชันเช็ค Raycast ว่ามองเห็นเป้าหมายจริงไหม (ไม่โดนกำแพงบัง)
+local function isVisible(targetPart)
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("Head") then return false end
+    
+    local origin = Camera.CFrame.Position
+    local direction = targetPart.Position - origin
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    raycastParams.IgnoreWater = true
+    
+    local result = workspace:Raycast(origin, direction, raycastParams)
+    if result then
+        local hitInstance = result.Instance
+        if hitInstance:IsDescendantOf(targetPart.Parent) then
+            return true
+        end
+        return false
+    end
+    return true
+end
+
+-- ฟังก์ชันหาเป้าหมายและรักษาสภาพการล็อกต่อเนื่อง
+local function getClosestPlayerInFOV()
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    FOFCircle.Position = screenCenter
+    FOFCircle.Radius = fovSize
+
+    -- 1. เช็คเป้าหมายเดิมก่อนว่ายังใช้งานได้อยู่ไหม (ถ้ายังอยู่ ให้ล็อกต่อเนื่องยาวไป)
+    if currentTarget and currentTarget.Parent and currentTarget.Parent:FindFirstChild("Humanoid") then
+        local humanoid = currentTarget.Parent.Humanoid
+        if humanoid.Health > 0 then
+            local screenPoint, onScreen = Camera:WorldToViewportPoint(currentTarget.Position)
+            if onScreen then
+                local centerDistance = (Vector2.new(screenPoint.X, screenPoint.Y) - screenCenter).Magnitude
+                -- ถ้ายšงอยู่ในวง FOV และยังมองเห็น ให้ล็อกเป้าเดิมต่อทันที
+                if centerDistance <= fovSize and isVisible(currentTarget) then
+                    return currentTarget
+                end
+            end
+        end
+    end
+
+    -- 2. ถ้าเป้าหมายเก่าหลุดวง FOV หรือตาย/โดนบัง ให้หาคนใหม่ที่ใกล้ที่สุดในวง
+    local closestTarget = nil
+    local shortestDistance = fovSize
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local head = player.Character:FindFirstChild("Head")
+            
+            if humanoid and humanoid.Health > 0 and head then
+                local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
+                
+                if onScreen then
+                    local centerDistance = (Vector2.new(screenPoint.X, screenPoint.Y) - screenCenter).Magnitude
+                    
+                    if centerDistance <= fovSize then
+                        if isVisible(head) then
+                            if centerDistance < shortestDistance then
+                                shortestDistance = centerDistance
+                                closestTarget = head
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    currentTarget = closestTarget
+    return currentTarget
+end
+
+-- ลูปทำงาน Aimbot ล็อกต่อเนื่อง
+RunService.RenderStepped:Connect(function()
+    if not ScreenGui.Parent then return end
+    if aimbotEnabled then
+        local target = getClosestPlayerInFOV()
+        if target then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        else
+            currentTarget = nil
+        end
+    else
+        currentTarget = nil
+    end
+end)
